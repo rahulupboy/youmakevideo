@@ -54,7 +54,7 @@ export default function VideoCreationPanel({ courseId, question }: VideoCreation
   const [showCaptionPreview, setShowCaptionPreview] = useState(false);
 
   const GEMINI_API_KEY = 'AIzaSyDgShKEEeX9viEQ90JHAUBfwQqlu0c9rBw';
-  const VOICE_API_KEY = 'sk_78d719766a3026b96c79d89fefeac203b978509b03404756';
+  const VOICE_API_KEY = 'sk_e7983a84b66dc07658f0286b863641fe7e87d7a93aca7c15';
   const VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
 
   useEffect(() => {

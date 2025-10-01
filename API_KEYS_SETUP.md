@@ -12,7 +12,7 @@ AIzaSyDgShKEEeX9viEQ90JHAUBfwQqlu0c9rBw
 
 ### ✅ ElevenLabs Voice API
 ```
-API Key: sk_78d719766a3026b96c79d89fefeac203b978509b03404756
+API Key: sk_e7983a84b66dc07658f0286b863641fe7e87d7a93aca7c15
 Voice ID: ap2_01771851-fe5d-4e13-a843-a49b28e72ef9
 ```
 - **Purpose**: Text-to-speech voice generation

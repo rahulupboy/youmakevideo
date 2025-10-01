@@ -174,7 +174,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ## API Keys Configured
 
 - **Gemini AI**: AIzaSyDgShKEEeX9viEQ90JHAUBfwQqlu0c9rBw
-- **ElevenLabs**: sk_78d719766a3026b96c79d89fefeac203b978509b03404756
+- **ElevenLabs**: sk_e7983a84b66dc07658f0286b863641fe7e87d7a93aca7c15
 - **Voice ID**: ap2_01771851-fe5d-4e13-a843-a49b28e72ef9
 
 ## Storage Buckets Required

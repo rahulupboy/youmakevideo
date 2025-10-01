@@ -30,9 +30,22 @@ interface GeneratedScript {
   examName: string;
 }
 
+interface GeneratedAudio {
+  audioBlob: Blob;
+  audioUrl: string;
+  videoId: string;
+}
+
+interface GeneratedCaptions {
+  captions: CaptionSegment[];
+  videoId: string;
+}
+
 export default function VideoCreationPanel({ courseId, question }: VideoCreationPanelProps) {
   const [videoRecord, setVideoRecord] = useState<VideoRecord | null>(null);
   const [generatedScript, setGeneratedScript] = useState<GeneratedScript | null>(null);
+  const [generatedAudio, setGeneratedAudio] = useState<GeneratedAudio | null>(null);
+  const [generatedCaptions, setGeneratedCaptions] = useState<GeneratedCaptions | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [availableVideos, setAvailableVideos] = useState<VideoRecord[]>([]);
@@ -196,7 +209,6 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
         .replace(/\*\*/g, '')
         .trim();
 
-      // Generate audio using ElevenLabs
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
         method: 'POST',
         headers: {
@@ -227,18 +239,37 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
         throw new Error('Generated audio is empty');
       }
 
-      // Convert blob to base64 for edge function upload
+      const audioUrl = URL.createObjectURL(audioBlob);
+      setGeneratedAudio({
+        audioBlob,
+        audioUrl,
+        videoId: targetVideo.id
+      });
+    } catch (err: any) {
+      console.error('Voice-over error:', err);
+      setError(err.message || 'Failed to generate voice-over');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const saveAudioToDatabase = async () => {
+    if (!generatedAudio) return;
+
+    setLoading('saving-audio');
+    setError(null);
+
+    try {
       const reader = new FileReader();
       const base64Audio = await new Promise<string>((resolve, reject) => {
         reader.onloadend = () => {
           const base64 = reader.result as string;
-          resolve(base64.split(',')[1]); // Remove data:audio/mpeg;base64, prefix
+          resolve(base64.split(',')[1]);
         };
         reader.onerror = reject;
-        reader.readAsDataURL(audioBlob);
+        reader.readAsDataURL(generatedAudio.audioBlob);
       });
 
-      // Use edge function to upload with service role (bypasses RLS)
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const uploadResponse = await fetch(`${supabaseUrl}/functions/v1/upload-audio`, {
         method: 'POST',
@@ -247,9 +278,9 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({
-          video_id: targetVideo.id,
+          video_id: generatedAudio.videoId,
           audio_base64: base64Audio,
-          filename: `audio_${targetVideo.id}_${Date.now()}.mp3`
+          filename: `audio_${generatedAudio.videoId}_${Date.now()}.mp3`
         })
       });
 
@@ -264,7 +295,6 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
         throw new Error('Invalid upload response');
       }
 
-      // Update video record
       const { data: updated, error: updateError } = await supabase
         .from('videos')
         .update({
@@ -272,7 +302,7 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
           status: 'audio_generated',
           updated_at: new Date().toISOString()
         })
-        .eq('id', targetVideo.id)
+        .eq('id', generatedAudio.videoId)
         .select()
         .single();
 
@@ -281,20 +311,13 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
         throw new Error(`Database update failed: ${updateError.message}`);
       }
 
+      URL.revokeObjectURL(generatedAudio.audioUrl);
+      setGeneratedAudio(null);
       setVideoRecord(updated);
       await loadAvailableVideos();
-
-      if (videoId) {
-        const { data: refreshed } = await supabase
-          .from('videos')
-          .select('*')
-          .eq('id', videoId)
-          .maybeSingle();
-        if (refreshed) setVideoRecord(refreshed);
-      }
     } catch (err: any) {
-      console.error('Voice-over error:', err);
-      setError(err.message || 'Failed to generate voice-over');
+      console.error('Save audio error:', err);
+      setError(err.message || 'Failed to save audio');
     } finally {
       setLoading(null);
     }
@@ -340,14 +363,33 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
         throw new Error('Invalid caption data received');
       }
 
+      setGeneratedCaptions({
+        captions: result.captions,
+        videoId: videoRecord.id
+      });
+    } catch (err: any) {
+      console.error('Caption generation error:', err);
+      setError(err.message || 'Failed to generate captions');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const saveCaptionsToDatabase = async () => {
+    if (!generatedCaptions) return;
+
+    setLoading('saving-captions');
+    setError(null);
+
+    try {
       const { data: updated, error: updateError } = await supabase
         .from('videos')
         .update({
-          captions_data: result.captions,
+          captions_data: generatedCaptions.captions,
           status: 'captions_generated',
           updated_at: new Date().toISOString()
         })
-        .eq('id', videoRecord.id)
+        .eq('id', generatedCaptions.videoId)
         .select()
         .single();
 
@@ -356,10 +398,11 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
         throw new Error(`Failed to save captions: ${updateError.message}`);
       }
 
+      setGeneratedCaptions(null);
       setVideoRecord(updated);
     } catch (err: any) {
-      console.error('Caption generation error:', err);
-      setError(err.message || 'Failed to generate captions');
+      console.error('Save captions error:', err);
+      setError(err.message || 'Failed to save captions');
     } finally {
       setLoading(null);
     }
@@ -546,7 +589,7 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
           <div className="flex-1">
             <button
               onClick={() => generateVoiceOver()}
-              disabled={!videoRecord?.script || loading !== null}
+              disabled={!videoRecord?.script || loading !== null || videoRecord?.audio_url !== undefined}
               className={`w-full flex items-center justify-between p-4 rounded-lg transition-all ${
                 getStepStatus('audio') === 'completed'
                   ? 'bg-green-600 text-white'
@@ -568,6 +611,35 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
             </button>
           </div>
         </div>
+
+        {/* Audio Preview */}
+        {generatedAudio && !videoRecord?.audio_url && (
+          <div className="ml-8 space-y-4">
+            <div className="p-4 bg-slate-700 rounded-lg">
+              <h4 className="text-white font-medium mb-3">Audio Preview:</h4>
+              <audio controls className="w-full mb-3">
+                <source src={generatedAudio.audioUrl} type="audio/mpeg" />
+              </audio>
+            </div>
+            <button
+              onClick={saveAudioToDatabase}
+              disabled={loading !== null}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading === 'saving-audio' ? (
+                <>
+                  <Loader className="w-5 h-5 animate-spin" />
+                  Saving to Supabase...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-5 h-5" />
+                  Save to Supabase
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Available Videos for Voice Over */}
         {availableVideos.length > 0 && (
@@ -638,7 +710,7 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
           <div className="flex-1">
             <button
               onClick={generateCaptions}
-              disabled={!videoRecord?.audio_url || loading !== null}
+              disabled={!videoRecord?.audio_url || loading !== null || videoRecord?.captions_data !== undefined}
               className={`w-full flex items-center justify-between p-4 rounded-lg transition-all ${
                 getStepStatus('captions') === 'completed'
                   ? 'bg-green-600 text-white'
@@ -661,11 +733,49 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
           </div>
         </div>
 
+        {/* Caption Preview */}
+        {generatedCaptions && !videoRecord?.captions_data && (
+          <div className="ml-8 space-y-4">
+            <div className="p-4 bg-slate-700 rounded-lg">
+              <h4 className="text-white font-medium mb-3">Caption Preview:</h4>
+              <div className="max-h-96 overflow-y-auto space-y-2">
+                {generatedCaptions.captions.map((caption: CaptionSegment, index: number) => (
+                  <div key={index} className="p-2 bg-slate-600 rounded">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-blue-400 font-mono">
+                        {formatTime(parseFloat(caption.start as any))} → {formatTime(parseFloat(caption.end as any))}
+                      </span>
+                    </div>
+                    <p className="text-slate-200 text-sm">{caption.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={saveCaptionsToDatabase}
+              disabled={loading !== null}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading === 'saving-captions' ? (
+                <>
+                  <Loader className="w-5 h-5 animate-spin" />
+                  Saving to Supabase...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-5 h-5" />
+                  Save to Supabase
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         {videoRecord?.captions_data && (
           <div className="ml-8 p-4 bg-slate-700 rounded-lg space-y-3">
             <h4 className="text-green-400 font-medium flex items-center gap-2">
               <CheckCircle className="w-4 h-4" />
-              Captions generated successfully
+              Captions saved to database
             </h4>
             <button
               onClick={() => {
@@ -684,7 +794,7 @@ Make the script conversational, engaging, and suitable for voice-over. Use simpl
                     <div key={index} className="p-2 bg-slate-700 rounded">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs text-blue-400 font-mono">
-                          {formatTime(caption.start)} → {formatTime(caption.end)}
+                          {formatTime(parseFloat(caption.start as any))} → {formatTime(parseFloat(caption.end as any))}
                         </span>
                       </div>
                       <p className="text-slate-200 text-sm">{caption.text}</p>

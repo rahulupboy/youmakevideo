@@ -28,19 +28,16 @@ Deno.serve(async (req: Request) => {
       throw new Error('Missing required fields: video_id, audio_base64, filename');
     }
 
-    // Create Supabase client with service role (bypasses RLS)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Convert base64 to Uint8Array
     const binaryString = atob(audio_base64);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
 
-    // Upload to audio-files bucket using service role
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('audio-files')
       .upload(filename, bytes, {
@@ -54,7 +51,6 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Storage upload failed: ${uploadError.message}`);
     }
 
-    // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('audio-files')
       .getPublicUrl(filename);

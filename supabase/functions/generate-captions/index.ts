@@ -23,14 +23,10 @@ Deno.serve(async (req: Request) => {
   try {
     const { video_id, audio_url, script }: CaptionRequest = await req.json();
 
-    // Split script into words for caption timing
     const words = script.split(/\s+/).filter(word => word.length > 0);
-    
-    // Estimate timing (average speaking rate: 150 words per minute = 2.5 words per second)
     const wordsPerSecond = 2.5;
     const secondsPerWord = 1 / wordsPerSecond;
     
-    // Generate caption data with timing
     const captions = [];
     let currentTime = 0;
     let currentPhrase = [];
@@ -40,7 +36,6 @@ Deno.serve(async (req: Request) => {
       const word = words[i];
       currentPhrase.push(word);
       
-      // Create caption every 5-7 words or at sentence end
       if (currentPhrase.length >= 5 || 
           word.match(/[.!?]$/) || 
           i === words.length - 1) {

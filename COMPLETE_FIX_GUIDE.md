@@ -135,7 +135,7 @@ Used for: Script generation
 
 ### ElevenLabs API Key
 ```
-Already set: sk_78d719766a3026b96c79d89fefeac203b978509b03404756
+Already set: sk_e7983a84b66dc07658f0286b863641fe7e87d7a93aca7c15
 Voice ID: 21m00Tcm4TlvDq8ikWAM
 Used for: Text-to-speech audio generation
 ```
